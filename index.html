@@ -167,6 +167,9 @@ select{border:1px solid var(--line);border-radius:9px;padding:9px;font-family:va
 .fund-add .btns button{border:0;background:var(--navy);color:#fff;border-radius:10px;padding:11px 18px;font-weight:600}
 .fund-add .btns .file{background:#fff;color:var(--ink);border:1px solid var(--line)}
 .fund-err{color:var(--red);font-size:12.5px;margin-top:8px}
+.infobtn{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:1px solid #cfd2da;color:#8b90a0;font-size:10px;font-weight:700;cursor:pointer;margin-left:6px;font-family:var(--sans);vertical-align:middle;line-height:1}
+.infobtn:hover{border-color:var(--navy);color:var(--navy)}
+.modal p+p{margin-top:10px}.modal .k{font-family:var(--mono);background:#f2f2f4;border-radius:6px;padding:1px 6px;font-size:12px}
 @media(max-width:1200px){.dash{grid-template-columns:1fr}.bt-cols{grid-template-columns:1fr}.pf{position:static}.two{grid-template-columns:1fr}.statrow{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:1fr 1fr}}
 </style>
 </head>
@@ -174,7 +177,6 @@ select{border:1px solid var(--line);border-radius:9px;padding:9px;font-family:va
 
 <div class="topbar"><div class="topwrap">
   <div class="brand">
-    <div class="logo" id="logoBox">GS</div>
     <div><h1 id="brandName">Mercados &amp; Carteras</h1><small>VERSIÓN PROTOTIPO · GUILLEM S.</small></div>
   </div>
   <div class="spacer"></div>
@@ -206,9 +208,9 @@ select{border:1px solid var(--line);border-radius:9px;padding:9px;font-family:va
       <div>
         <div class="statrow">
           <div class="stat pulse"><div class="lbl"><span class="dot" style="background:var(--amber)"></span>PULSO DE MERCADO</div><div class="big" id="pulseTxt">Tendencia bajo presión</div><div class="sm">según amplitud del tablón</div></div>
-          <div class="stat"><div class="lbl">S&amp;P 500</div><div class="big" id="spDist">7</div><div class="sm">días distribución · 3 acum.</div></div>
-          <div class="stat"><div class="lbl">NASDAQ</div><div class="big" id="ndxDist">6</div><div class="sm">días distribución · 3 acum.</div></div>
-          <div class="stat"><div class="lbl">TENDENCIA · MEDIA 50S</div><div class="big" style="font-size:22px">S&amp;P 500 <span id="spTrend"></span></div><div class="sm">Nasdaq <span id="ndxTrend"></span></div></div>
+          <div class="stat"><div class="lbl">S&amp;P 500 · DISTRIBUCIÓN<span class="infobtn" data-info="dist">i</span></div><div class="big" id="spDist">—</div><div class="sm" id="spDistSub">días de distribución</div></div>
+          <div class="stat"><div class="lbl">NASDAQ · DISTRIBUCIÓN<span class="infobtn" data-info="dist">i</span></div><div class="big" id="ndxDist">—</div><div class="sm" id="ndxDistSub">días de distribución</div></div>
+          <div class="stat"><div class="lbl">TENDENCIA · MEDIA 50S<span class="infobtn" data-info="tend">i</span></div><div class="big" style="font-size:22px">S&amp;P 500 <span id="spTrend"></span></div><div class="sm">Nasdaq <span id="ndxTrend"></span></div></div>
         </div>
         <div class="card" style="margin-top:16px"><div class="section-title" style="font-size:20px">Corrientes del mercado <span>var. por ETF</span></div><div class="canvas-h" style="margin-top:8px"><canvas id="flowChart"></canvas></div></div>
         <div class="card" style="margin-top:16px"><div class="section-title" style="font-size:20px">Radar de fuerza <span>según el momentum del tablón</span></div>
@@ -388,7 +390,7 @@ const FUND_UNIVERSE={
  "FY_0P00009093.F":{n:"Renta 4 Pegasus",cat:"ACTIVA · ALTERNATIVOS Y RETORNO ABSOLUTO",ret:.025,vol:.04,lM:.25,lB:.35},
  "FY_0P00000RQC.F":{n:"Vanguard Global Stock Index",cat:"PASIVA · INDEXADOS",ret:.095,vol:.15,lM:.95}
 };
-let DATES=[],N=0,PRICES={},INCEPTION={},FUNDS_META={},DATA_MODE="modelo",DATA_ASOF="2026-06-29",DATA_SRC="datos modelados (demo)";
+let DATES=[],N=0,PRICES={},INCEPTION={},FUNDS_META={},PANEL=null,DATA_MODE="modelo",DATA_ASOF="2026-06-29",DATA_SRC="datos modelados (demo)";
 const nameOf=tk=>FUNDS_META[tk]?FUNDS_META[tk].n:(U[tk]?U[tk].n:tk);
 
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -424,6 +426,7 @@ function buildReal(D){
     PRICES[tk]=arr;INCEPTION[tk]=first<0?0:first;
     if(t.fondo)FUNDS_META[tk]={n:t.nombre||tk,fondo:true,cat:t.cat||(FUND_UNIVERSE[tk]&&FUND_UNIVERSE[tk].cat)||''};
   }
+  if(D.panel)PANEL=D.panel;
   DATA_MODE="real";DATA_ASOF=D.asof;DATA_SRC=D.fuente||"Yahoo Finance";
 }
 if(window.DATOS&&window.DATOS.tickers)buildReal(window.DATOS);else buildModeled();
@@ -522,8 +525,8 @@ function renderFactorMap(){
   document.getElementById('factorMap').innerHTML=h;
 }
 let assetChart,themeChart,curPeriod="YTD";
-const ASSET_SET={SPY:'#16181f',QQQ:'#e26d6d',IWM:'#9aa0ac',VGK:'#b0b6c2',EEM:'#c8ccd6',EWJ:'#d6d9e0',AGG:'#2fa89b',GLD:'#c9922e',SLV:'#b7b7b7',IBIT:'#3fa564',TLT:'#8a6bcc',DBC:'#caa25a',VNQ:'#7fa9d6'};
-const THEME_SET={SMH:'#16181f',BOTZ:'#e26d6d',XLK:'#3fa564',SKYY:'#b0b6c2',CIBR:'#c9922e',FINX:'#c8ccd6',BLOK:'#7fa9d6',ARKK:'#8a6bcc',XBI:'#b7b7b7',XLV:'#d0a94a',XLE:'#7c5cff',ICLN:'#9fd6b0',TAN:'#caa25a',URA:'#e0a45a',GDX:'#c9922e',ITA:'#5b8def'};
+const ASSET_SET={SPY:'#1f2d3d',QQQ:'#e8590c',IWM:'#1c7ed6',VGK:'#2f9e44',EEM:'#d6336c',EWJ:'#7048e8',AGG:'#0ca678',GLD:'#c9922e',SLV:'#868e96',IBIT:'#e64980',TLT:'#1098ad',DBC:'#a9754f',VNQ:'#5c940d'};
+const THEME_SET={SMH:'#1f2d3d',BOTZ:'#e8590c',XLK:'#1c7ed6',SKYY:'#2f9e44',CIBR:'#d6336c',FINX:'#7048e8',BLOK:'#0ca678',ARKK:'#c9922e',XBI:'#868e96',XLV:'#e64980',XLE:'#1098ad',ICLN:'#5c940d',TAN:'#f08c00',URA:'#a9754f',GDX:'#ae3ec9',ITA:'#364fc7'};
 let assetActive=new Set(['SPY','QQQ','AGG','GLD','IBIT']),themeActive=new Set(['SMH','ARKK','XLK','CIBR','XLE']);
 function periodStart(){const e=DATES[N-1];let s;if(curPeriod==='1M')s=iOf(new Date(Date.UTC(e.getUTCFullYear(),e.getUTCMonth()-1,e.getUTCDate())));else if(curPeriod==='3M')s=iOf(new Date(Date.UTC(e.getUTCFullYear(),e.getUTCMonth()-3,e.getUTCDate())));else if(curPeriod==='YTD')s=iOf(new Date(Date.UTC(e.getUTCFullYear(),0,1)));else if(curPeriod==='3A')s=iOf(new Date(Date.UTC(e.getUTCFullYear()-3,e.getUTCMonth(),e.getUTCDate())));else s=iOf(new Date(Date.UTC(e.getUTCFullYear()-1,e.getUTCMonth(),e.getUTCDate())));return s;}
 function base100(tk,s){const p=PRICES[tk],out=[];let base=null;for(let t=s;t<N;t++){if(p[t]==null){out.push(null);continue;}if(base==null)base=p[t];out.push(p[t]/base*100);}return out;}
@@ -549,7 +552,19 @@ function renderSectorTable(){
   const cell=v=>`<td class="${v>=0?'up':'dn'}">${v>=0?'+':''}${v.toFixed(1)}%</td>`,fc=f=>`hsl(140,${35+f*.3}%,${72-f*.25}%)`;
   document.querySelector('#sectorTable tbody').innerHTML=rows.map(r=>`<tr><td class="name"><b style="font-family:var(--mono)">${r.tk}</b> · ${r.n}</td><td><span class="rs" style="background:${fc(r.fuerza)}">${r.fuerza}</span></td><td>${r.last.toFixed(2)}</td>${cell(r.d1)}${cell(r.d5)}${cell(r.d21)}${cell(r.ytd)}</tr>`).join('');
 }
-function renderDashboard(){renderWorstBest();renderFlow();renderRadar();renderBreadth();renderFactorMap();renderSectorTable();redrawAsset();redrawTheme();}
+function distAccum(tk){/* respaldo por precio (modo demo, sin volumen) */
+  const p=PRICES[tk];if(!p)return{dist:0,acc:0};let dist=0,acc=0;
+  for(let t=Math.max(1,N-25);t<N;t++){if(p[t]==null||p[t-1]==null)continue;const r=p[t]/p[t-1]-1;if(r<=-0.002)dist++;else if(r>=0.002)acc++;}
+  return{dist,acc};
+}
+function renderPanelStats(){
+  let sp,ndx;
+  if(PANEL){sp={dist:PANEL.spDist,acc:PANEL.spAccum};ndx={dist:PANEL.ndxDist,acc:PANEL.ndxAccum};}
+  else{sp=distAccum('SPY');ndx=distAccum('QQQ');}
+  const set=(id,o)=>{document.getElementById(id).textContent=o.dist;document.getElementById(id+'Sub').textContent=o.acc+' de acumulación · 25 sesiones';};
+  set('spDist',sp);set('ndxDist',ndx);
+}
+function renderDashboard(){renderWorstBest();renderFlow();renderRadar();renderBreadth();renderPanelStats();renderFactorMap();renderSectorTable();redrawAsset();redrawTheme();}
 document.getElementById('segCat').querySelectorAll('button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#segCat button').forEach(x=>x.classList.remove('on'));b.classList.add('on');curCat=b.dataset.cat;renderWorstBest();renderFlow();renderRadar();});
 document.getElementById('segFreq').querySelectorAll('button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#segFreq button').forEach(x=>x.classList.remove('on'));b.classList.add('on');curFreq=b.dataset.f;renderWorstBest();renderFlow();renderRadar();});
 document.getElementById('segPeriod').querySelectorAll('button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#segPeriod button').forEach(x=>x.classList.remove('on'));b.classList.add('on');curPeriod=b.dataset.p;redrawAsset();redrawTheme();});
@@ -679,6 +694,20 @@ function openInfo(key){const c=CLASSIC_INFO[key];document.getElementById('modalB
 window.closeInfo=()=>document.getElementById('modalBg').classList.remove('show');
 window.usePreset=k=>{portfolio={...PRESETS[k]};renderPortfolio();buildCatalog(document.getElementById('etfSearch').value);closeInfo();doBacktest(portfolio,benchmark,plazo,'bt-results');};
 document.getElementById('modalBg').onclick=e=>{if(e.target.id==='modalBg')closeInfo();};
+
+/* Info del panel principal (distribución, tendencia) */
+const PANEL_INFO={
+ dist:{t:"Días de distribución y acumulación",p:`
+   <p>Mide la <b>presión de las manos fuertes</b> (institucionales) sobre el índice — metodología clásica de William O'Neil / IBD.</p>
+   <p>Un <b>día de distribución</b> es una sesión en la que el índice <b>cae ≥0,2%</b> con <b>más volumen</b> que el día anterior: señal de que están <b>vendiendo</b>. Un <b>día de acumulación</b> es lo contrario (sube ≥0,2% con más volumen: están <b>comprando</b>).</p>
+   <p>Se cuentan en las <b>últimas 25 sesiones</b> (~5 semanas). <b>No es un número fijo: cambia cada día</b> según los datos reales. A partir de <b>~6 días de distribución</b> el mercado suele considerarse "bajo presión".</p>`},
+ tend:{t:"Tendencia · media de 50 semanas",p:`
+   <p>Compara el precio actual del índice con su <b>media móvil de 50 semanas</b> (~250 sesiones), una de las referencias más usadas de la <b>tendencia de fondo</b> a largo plazo.</p>
+   <p><b>▲ sobre</b> = el índice cotiza <b>por encima</b> de su media (tendencia alcista de fondo). <b>▼ bajo</b> = por <b>debajo</b> (tendencia debilitándose).</p>
+   <p><b>Sí, se actualiza</b> automáticamente con cada dato nuevo.</p>`}
+};
+function openPanelInfo(k){const c=PANEL_INFO[k];document.getElementById('modalBox').innerHTML=`<button class="close" onclick="closeInfo()">Cerrar</button><h3>${c.t}</h3>${c.p}`;document.getElementById('modalBg').classList.add('show');}
+document.querySelectorAll('.infobtn').forEach(b=>b.onclick=()=>openPanelInfo(b.dataset.info));
 
 /* ===================== 7) BACKTEST FONDOS ===================== */
 let fundKeyCounter=0,fportfolio={},fbench='SPY',fplazo='all';

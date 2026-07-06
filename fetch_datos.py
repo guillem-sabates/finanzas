@@ -122,6 +122,46 @@ def descargar(simbolo):
     return None
 
 
+def dist_accum(simbolo, sesiones=25):
+    """Días de distribución (cae >=0.2% con más volumen) y de acumulación
+    (sube >=0.2% con más volumen) en las últimas 'sesiones'. Usa cierre y volumen."""
+    url = CHART.format(sym=urllib.parse.quote(simbolo), p1=PERIOD1)
+    for intento in range(3):
+        try:
+            req = urllib.request.Request(url, headers=UA)
+            with urllib.request.urlopen(req, timeout=30) as r:
+                d = json.load(r)
+            q = d["chart"]["result"][0]["indicators"]["quote"][0]
+            close, vol = q.get("close"), q.get("volume")
+            pares = [(c, v) for c, v in zip(close, vol) if c is not None and v]
+            dist = acum = 0
+            ventana = pares[-(sesiones + 1):]
+            for k in range(1, len(ventana)):
+                c0, v0 = ventana[k - 1]
+                c1, v1 = ventana[k]
+                ret = c1 / c0 - 1
+                if v1 > v0:
+                    if ret <= -0.002:
+                        dist += 1
+                    elif ret >= 0.002:
+                        acum += 1
+            return dist, acum
+        except Exception as e:
+            print(f"   reintento panel {simbolo}: {e}")
+            time.sleep(1.5)
+    return None
+
+
+def panel_stats():
+    """Datos del panel (presión de mercado) para S&P 500 y NASDAQ."""
+    out = {}
+    for sym, pref in (("SPY", "sp"), ("QQQ", "ndx")):
+        r = dist_accum(sym)
+        if r:
+            out[pref + "Dist"], out[pref + "Accum"] = r
+    return out
+
+
 def main():
     universo = list(dict.fromkeys(ETFS))  # sin duplicados, en orden
     tickers = {}
@@ -157,11 +197,16 @@ def main():
     if not tickers:
         sys.exit("\nNo se descargo ningun dato. Revisa tu conexion a internet.")
 
+    print("panel (presion de mercado) ...", end=" ", flush=True)
+    panel = panel_stats()
+    print("ok" if panel else "sin datos")
+
     asof = max(v["d"][-1] for v in tickers.values())
     payload = {
         "asof": asof,
         "generado": dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
         "fuente": "Yahoo Finance · cierres ajustados (dividendos reinvertidos)",
+        "panel": panel,
         "tickers": tickers,
     }
 
@@ -174,7 +219,7 @@ def main():
     print(f"OK · datos.js generado · {len(tickers)} activos · datos a {asof}")
     if fallidos:
         print("Sin datos (Yahoo no los tenia):", ", ".join(fallidos))
-    print("Abre plataforma-finanzas.html y veras el banner en verde.")
+    print("Abre index.html y veras el banner en verde.")
     print("=" * 62)
 
 
