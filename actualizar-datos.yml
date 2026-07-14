@@ -1,0 +1,77 @@
+name: Actualizar datos
+
+# Cada día laborable tras el cierre de EE.UU. (22:10 UTC, no en el minuto 0)
+# y a mano desde la pestaña "Actions".
+on:
+  schedule:
+    - cron: "10 22 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actualizar-datos
+  cancel-in-progress: false
+
+jobs:
+  # Orden §11: unit tests -> descarga a datos CANDIDATO -> validación ->
+  # arrancar la app con los datos candidatos -> Playwright contra el candidato ->
+  # reemplazo atómico (lo hace fetch_datos.py) -> commit SOLO si Playwright pasa.
+  # Así la UI NUNCA se prueba solo contra los datos de ayer.
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Validación sintáctica de Python
+        run: python -m py_compile fetch_datos.py
+      - name: pytest (fetch, sin red real)
+        run: pip install pytest && pytest -q
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - name: Instalar dependencias JS
+        run: npm ci || npm install
+      - name: Tests JavaScript (Vitest — motor de finance.js)
+        run: npx vitest run
+
+      # 1) Descarga los datos NUEVOS a datos.json (candidato). El propio script
+      #    hace temp -> validar esquema -> comparar con el anterior -> reemplazo
+      #    atómico. Si algo es anómalo sale != 0 y el job falla (sin commit).
+      - name: Descargar y validar datos candidatos (atómico + comparación)
+        run: python fetch_datos.py | tee validacion.log
+
+      # 2) Playwright se ejecuta CONTRA la app servida con los datos candidatos
+      #    recién escritos (playwright.config.js arranca el servidor estático).
+      - name: Instalar navegadores Playwright
+        run: npx playwright install --with-deps
+      - name: Tests de UI contra los datos candidatos (Playwright)
+        run: npx playwright test
+
+      - name: Guardar informes (validación + Playwright)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informes
+          path: |
+            validacion.log
+            playwright-report/
+          retention-days: 14
+
+      # 3) Commit SOLO si todo lo anterior pasó. Si Playwright falló, este paso
+      #    no se ejecuta y el datos.json anterior permanece en el repositorio.
+      - name: Commit y push si cambió
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add datos.json
+          git diff --staged --quiet || git commit -m "Datos actualizados $(date -u +%Y-%m-%d)"
+          git push
